@@ -68,7 +68,6 @@ _DENSE_A_3D = torch.tensor(
 _SHAPE_3D = (4, 3, 6)
 _I, _J, _K = _SHAPE_3D
 _X = torch.arange(_K, dtype=torch.float32, device=DEVICE) * 0.1 + 1.0  # (K,)
-_GARBAGE = 777.0
 
 
 def _int64(xs):
@@ -91,7 +90,7 @@ def _build_sparse_3d(fmt0: str, fmt1: str, fmt2: str) -> hl.SparseTensor:
     )
 
     return hl.SparseTensor(
-        values=values,
+        values=ct.values,
         shape=_SHAPE_3D,
         ptrs=(ct.levels[0].ptrs, ct.levels[1].ptrs, ct.levels[2].ptrs),
         coords=(ct.levels[0].coords, ct.levels[1].coords, ct.levels[2].coords),

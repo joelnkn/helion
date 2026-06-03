@@ -672,6 +672,8 @@ def _csr_setup(
     return unq_parent, csr_axis, inverse, counts, d0
 
 
+# TODO: fill_value should only place GARBAGE=777.0 when the formatting implicitly labels it
+#       as garbage, eg. when a padding layer labels it with -1 through coord.
 def sparse_convert(
     values: torch.Tensor,
     coords: torch.Tensor,
