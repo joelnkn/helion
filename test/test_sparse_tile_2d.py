@@ -63,15 +63,7 @@ def _build_sparse_2d(fmt0: str, fmt1: str) -> hl.SparseTensor:
     coords = coo.t().contiguous()  # (ndim, nnz)
     values = _DENSE_A[coords[0], coords[1]]  # (nnz,)
 
-    ct = sparse_convert(values, coords, _SHAPE, [[0], [1]], [[1], [1]], [fmt0, fmt1])
-
-    return hl.SparseTensor(
-        values=ct.values,
-        shape=_SHAPE,
-        ptrs=(ct.levels[0].ptrs, ct.levels[1].ptrs),
-        coords=(ct.levels[0].coords, ct.levels[1].coords),
-        bitmaps=(None, None),
-    )
+    return sparse_convert(values, coords, _SHAPE, [[0], [1]], [[1], [1]], [fmt0, fmt1])
 
 
 @helion.kernel(config=helion.Config(block_sizes=[4, 4, 8]))

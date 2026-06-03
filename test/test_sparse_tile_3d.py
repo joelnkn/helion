@@ -85,16 +85,8 @@ def _build_sparse_3d(fmt0: str, fmt1: str, fmt2: str) -> hl.SparseTensor:
     coords = coo.t().contiguous()  # (ndim, nnz)
     values = _DENSE_A_3D[coords[0], coords[1], coords[2]]  # (nnz,)
 
-    ct = sparse_convert(
+    return sparse_convert(
         values, coords, _SHAPE_3D, [[0], [1], [2]], [[1], [1], [1]], [fmt0, fmt1, fmt2]
-    )
-
-    return hl.SparseTensor(
-        values=ct.values,
-        shape=_SHAPE_3D,
-        ptrs=(ct.levels[0].ptrs, ct.levels[1].ptrs, ct.levels[2].ptrs),
-        coords=(ct.levels[0].coords, ct.levels[1].coords, ct.levels[2].coords),
-        bitmaps=(None, None, None),
     )
 
 
