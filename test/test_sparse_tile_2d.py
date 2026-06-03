@@ -68,17 +68,9 @@ def _build_sparse_2d(fmt0: str, fmt1: str) -> hl.SparseTensor:
     return hl.SparseTensor(
         values=ct.values,
         shape=_SHAPE,
-        ptrs=(ct.levels[0].ptrs, ct.levels[1].ptrs, ct.levels[2].ptrs),
-        coords=(ct.levels[0].coords, ct.levels[1].coords, ct.levels[2].coords),
-        bitmaps=(None, None, None),
-    )
-
-    return hl.SparseTensor(
-        values=values,
-        shape=_SHAPE,
-        ptrs=(ptrs0, ptrs1),
-        coords=(coords0, coords1),
-        bitmaps=(bitmaps0, bitmaps1),
+        ptrs=(ct.levels[0].ptrs, ct.levels[1].ptrs),
+        coords=(ct.levels[0].coords, ct.levels[1].coords),
+        bitmaps=(None, None),
     )
 
 
@@ -152,6 +144,7 @@ def spmm_dense_inner(
 # promise by pruning the garbage before Dense ever sees it.
 # ----------------------------------------------------------------------------
 
+_GARBAGE = 0.0
 _CONTRACT_SHAPE = (3, 3)
 _CONTRACT_N = 4
 _CONTRACT_STORED = torch.tensor(

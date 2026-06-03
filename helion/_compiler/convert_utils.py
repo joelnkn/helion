@@ -5,6 +5,8 @@ from typing import Any, Literal, Optional, Protocol, Sequence, TypeAlias, Union
 
 import torch
 
+import helion.language as hl
+
 # Per-level indexing representation. The four ``csr_*`` variants each map to a
 # dedicated ``LevelRep`` class. ``"csr"`` is accepted as a backward-compatible
 # alias for ``"csr_compressed"`` only at the public API surface; internally a
@@ -298,29 +300,6 @@ class LevelRep:
                 )
 
 
-# TODO: merge with hl.SparseTensor type
-@dataclass
-class ConvertTensor:
-    values: torch.Tensor
-    shape: tuple[int, ...]
-    levels: tuple[LevelRep, ...]
-
-    def __repr__(self) -> str:
-        def fmt(t: torch.Tensor | None) -> str:
-            return "None" if t is None else str(t.tolist())
-
-        lines = [
-            f"SparseTensor(shape={tuple(self.shape)})",
-            f"  values: {self.values.tolist()}",
-        ]
-        for i, lvl in enumerate(self.levels):
-            lines.append(
-                f"  L{i}[{lvl.spec.encoding}]: "
-                f"ptrs={fmt(lvl.ptrs)}, coords={fmt(lvl.coords)}"
-            )
-        return "\n".join(lines)
-
-
 # -----------------------------
 # Bottom-up build
 # -----------------------------
@@ -348,6 +327,7 @@ class BuildState:
     level_order: Sequence[Sequence[int]]
     values: torch.Tensor
     levels: list[LevelRep]
+    fill_value: float
 
     def __post_init__(self):
         self.device = self.coo.device
@@ -382,10 +362,6 @@ def build_compressed(state: BuildState, level_index: int, spec: LevelSpec) -> Le
         ptrs[1:] = parent_counts.cumsum(0)
 
     return LevelRep(spec, ptrs, level_coord)
-
-
-GARBAGE = 777.0
-# GARBAGE = 0
 
 
 def _tile_size(rep: LevelRep) -> int:
@@ -515,7 +491,13 @@ def build_dense(state: BuildState, level_index: int, spec: LevelSpec) -> LevelRe
 
     target_idx, tile = _scan_down_widen(state, dense_pos, total_slots)
     _scatter_to_target(
-        state, target_idx, tile, dense_pos, n_fibers, total_slots, fill_value=GARBAGE
+        state,
+        target_idx,
+        tile,
+        dense_pos,
+        n_fibers,
+        total_slots,
+        fill_value=state.fill_value,
     )
 
     return LevelRep(spec, None, None)
@@ -561,7 +543,13 @@ def build_padded(state: BuildState, level_index: int, spec: LevelSpec) -> LevelR
 
     target_idx, tile = _scan_down_widen(state, dense_pos, total_slots)
     _scatter_to_target(
-        state, target_idx, tile, dense_pos, n_fibers, total_slots, fill_value=GARBAGE
+        state,
+        target_idx,
+        tile,
+        dense_pos,
+        n_fibers,
+        total_slots,
+        fill_value=state.fill_value,
     )
 
     coords_2d = torch.full(
@@ -620,7 +608,13 @@ def build_jagged(state: BuildState, level_index: int, spec: LevelSpec) -> LevelR
 
     target_idx, tile = _scan_down_widen(state, dense_pos, total_slots)
     _scatter_to_target(
-        state, target_idx, tile, dense_pos, n_fibers, total_slots, fill_value=GARBAGE
+        state,
+        target_idx,
+        tile,
+        dense_pos,
+        n_fibers,
+        total_slots,
+        fill_value=state.fill_value,
     )
 
     return LevelRep(spec, ptrs, None)
@@ -672,8 +666,6 @@ def _csr_setup(
     return unq_parent, csr_axis, inverse, counts, d0
 
 
-# TODO: fill_value should only place GARBAGE=777.0 when the formatting implicitly labels it
-#       as garbage, eg. when a padding layer labels it with -1 through coord.
 def sparse_convert(
     values: torch.Tensor,
     coords: torch.Tensor,
@@ -682,8 +674,9 @@ def sparse_convert(
     block_size: Sequence[Sequence[int]],
     level_layout: Sequence[str],
     *,
+    fill_value: float = 0.0,
     level_encoding: Sequence[EncodingInput] | None = None,
-) -> ConvertTensor:
+) -> hl.SparseTensor:
     spec = format_spec_from_level_lists(
         level_order, shape, block_size, level_layout, level_encoding=level_encoding
     )
@@ -698,6 +691,7 @@ def sparse_convert(
         level_order=level_order,
         values=values,
         levels=[],
+        fill_value=fill_value,
     )
 
     # Bottom-up: leaf-most level first, root last. Each builder may rewrite
@@ -709,8 +703,14 @@ def sparse_convert(
             raise ValueError(f"unknown encoding {level.encoding!r}")
         state.levels.append(builder(state, i, level))
 
-    return ConvertTensor(
+    levels = tuple(reversed(state.levels))
+    ptrs = tuple(level.ptrs for level in levels)
+    coords = tuple(level.coords for level in levels)
+    bitmaps = tuple(None for _ in levels)
+    return hl.SparseTensor(
         values=state.values,
         shape=dense_shape,
-        levels=tuple(reversed(state.levels)),
+        ptrs=ptrs,
+        coords=coords,
+        bitmaps=bitmaps,
     )
