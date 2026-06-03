@@ -136,7 +136,7 @@ def spmm_dense_inner(
 # promise by pruning the garbage before Dense ever sees it.
 # ----------------------------------------------------------------------------
 
-_GARBAGE = 0.0
+_GARBAGE = 777.0
 _CONTRACT_SHAPE = (3, 3)
 _CONTRACT_N = 4
 _CONTRACT_STORED = torch.tensor(
